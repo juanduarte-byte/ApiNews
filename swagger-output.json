@@ -1,0 +1,178 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "API de Noticias - México",
+        "description": "API para la gestión de noticias, permitiendo a contribuidores registrar notas para la aprobación de administradores.",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:3000",
+            "description": "Servidor de Desarrollo"
+        }
+    ],
+    "paths": {
+        "/api/auth/register": {
+            "post": {
+                "summary": "Registra un nuevo usuario (Contribuidor)",
+                "tags": [
+                    "Auth"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "nombre": {
+                                        "type": "string"
+                                    },
+                                    "apellidos": {
+                                        "type": "string"
+                                    },
+                                    "nick": {
+                                        "type": "string"
+                                    },
+                                    "correo": {
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "contrasena": {
+                                        "type": "string",
+                                        "format": "password"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Usuario creado exitosamente"
+                    }
+                }
+            }
+        },
+        "/api/auth/login": {
+            "post": {
+                "summary": "Inicia sesión y obtiene un token JWT",
+                "tags": [
+                    "Auth"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "correo": {
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "contrasena": {
+                                        "type": "string",
+                                        "format": "password"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Login exitoso, devuelve token"
+                    }
+                }
+            }
+        },
+        "/api/users": {
+            "get": {
+                "summary": "Obtiene la lista de todos los usuarios (Admin)",
+                "tags": [
+                    "Users"
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de usuarios"
+                    }
+                }
+            }
+        },
+        "/api/news": {
+            "get": {
+                "summary": "Obtiene la lista de todas las noticias (Público)",
+                "tags": [
+                    "News"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de noticias"
+                    }
+                }
+            },
+            "post": {
+                "summary": "Crea una nueva noticia (Contribuidor)",
+                "tags": [
+                    "News"
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "titulo": {
+                                        "type": "string"
+                                    },
+                                    "descripcion": {
+                                        "type": "string"
+                                    },
+                                    "imagen": {
+                                        "type": "string"
+                                    },
+                                    "fecha_publicacion": {
+                                        "type": "string",
+                                        "format": "date-time"
+                                    },
+                                    "categoria_id": {
+                                        "type": "integer"
+                                    },
+                                    "estado_id": {
+                                        "type": "integer"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Noticia creada exitosamente"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT"
+            }
+        }
+    }
+}
