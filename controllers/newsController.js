@@ -2,109 +2,109 @@ const { New } = require('../models/NewModel');
 const { Category } = require('../models/CategoryModel');
 const { State } = require('../models/StateModel');
 const { User } = require('../models/UserModel');
+const { Profile } = require('../models/ProfileModel');
 
-async function index(req, res) {
+// Define las relaciones que se incluirán en las consultas de Usuario
+const relationsUser = [
+    { model: Profile, attributes: ['id', 'nombre'], as: 'perfil' }
+];
+
+// Define las relaciones (incluida la anidada) para las consultas de Noticia
+const relations = [
+    { model: Category, attributes: ['id', 'nombre', 'descripcion'], as: 'categoria' },
+    { model: State, attributes: ['id', 'nombre', 'abreviacion'], as: 'estado' },
+    { model: User, attributes: ['id', 'nick', 'nombre'], as: 'usuario', include: relationsUser }
+];
+
+// Obtener todas las noticias (con filtros y relaciones)
+const get = async (req, res) => {
     try {
-        const news = await New.findAll({
-            where: { activo: true },
-            include: [
-                { model: Category, as: 'categoria' },
-                { model: State, as: 'estado' },
-                { model: User, as: 'usuario', attributes: ['id', 'nombre', 'apellidos', 'nick', 'correo'] },
-            ],
-        });
-        res.json({ news });
-    } catch (err) {
-        console.error('News index error', err);
-        res.status(500).json({ message: 'Internal server error' });
+        const news = await New.findAll({ include: relations });
+        res.json(news);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al obtener noticias' });
     }
-}
+};
 
-async function show(req, res) {
+// Obtener una noticia por su ID (con relaciones)
+const getById = async (req, res) => {
     try {
-        const { id } = req.params;
-        const noticia = await New.findByPk(id, {
-            include: [
-                { model: Category, as: 'categoria' },
-                { model: State, as: 'estado' },
-                { model: User, as: 'usuario', attributes: ['id', 'nombre', 'apellidos', 'nick', 'correo'] },
-            ],
-        });
-        if (!noticia) return res.status(404).json({ message: 'Not found' });
-        res.json({ noticia });
-    } catch (err) {
-        console.error('News show error', err);
-        res.status(500).json({ message: 'Internal server error' });
-    }
-}
-
-async function create(req, res) {
-    try {
-        const { categoria_id, estado_id, titulo, fecha_publicacion, descripcion, imagen } = req.body;
-        if (!categoria_id || !estado_id || !titulo || !fecha_publicacion || !descripcion) {
-            return res.status(400).json({ message: 'Missing required fields' });
+        const newsItem = await New.findByPk(req.params.id, { include: relations });
+        if (newsItem) {
+            res.json(newsItem);
+        } else {
+            res.status(404).json({ message: 'Noticia no encontrada' });
         }
-        const usuario_id = req.user.id;
-        const created = await New.create({ categoria_id, estado_id, usuario_id, titulo, fecha_publicacion, descripcion, imagen });
-        res.status(201).json({ noticia: created });
-    } catch (err) {
-        console.error('News create error', err);
-        res.status(500).json({ message: 'Internal server error' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al obtener la noticia' });
     }
-}
+};
 
-async function update(req, res) {
+// Crear una nueva noticia
+const create = async (req, res) => {
     try {
-        const { id } = req.params;
-        const noticia = await New.findByPk(id);
-        if (!noticia) return res.status(404).json({ message: 'Not found' });
-
-        // only owner or admin
-        const isOwner = Number(req.user.id) === Number(noticia.usuario_id);
-        const isAdmin = Number(req.user.perfil_id) === 1;
-        if (!isOwner && !isAdmin) return res.status(403).json({ message: 'Not authorized' });
-
-        const allowed = ['categoria_id','estado_id','titulo','fecha_publicacion','descripcion','imagen','activo'];
-        allowed.forEach(field => {
-            if (field in req.body) noticia[field] = req.body[field];
+        const newNews = await New.create({
+            ...req.body,
+            usuario_id: req.user.id, // Asigna el ID del usuario autenticado
+            estado_id: 1, // Por defecto, estado "Pendiente"
         });
-        await noticia.save();
-        res.json({ noticia });
-    } catch (err) {
-        console.error('News update error', err);
-        res.status(500).json({ message: 'Internal server error' });
+        res.status(201).json(newNews);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al crear la noticia' });
     }
-}
+};
 
-async function changeState(req, res) {
+// Actualizar una noticia
+const update = async (req, res) => {
     try {
-        const { id } = req.params;
+        const newsItem = await New.findByPk(req.params.id);
+        if (!newsItem) {
+            return res.status(404).json({ message: 'Noticia no encontrada' });
+        }
+        // Solo el dueño o un admin pueden actualizar
+        if (newsItem.usuario_id !== req.user.id && req.user.perfil_id !== 1) {
+            return res.status(403).json({ message: 'No tienes permiso para actualizar esta noticia' });
+        }
+        await newsItem.update(req.body);
+        res.json(newsItem);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al actualizar la noticia' });
+    }
+};
+
+// Cambiar el estado de una noticia (solo Admin)
+const changeState = async (req, res) => {
+    try {
         const { estado_id } = req.body;
-        if (!estado_id) return res.status(400).json({ message: 'Missing estado_id' });
-        const noticia = await New.findByPk(id);
-        if (!noticia) return res.status(404).json({ message: 'Not found' });
-        noticia.estado_id = estado_id;
-        await noticia.save();
-        res.json({ noticia });
-    } catch (err) {
-        console.error('News changeState error', err);
-        res.status(500).json({ message: 'Internal server error' });
+        const newsItem = await New.findByPk(req.params.id);
+        if (!newsItem) {
+            return res.status(404).json({ message: 'Noticia no encontrada' });
+        }
+        await newsItem.update({ estado_id });
+        res.json({ message: 'Estado de la noticia actualizado' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al cambiar el estado de la noticia' });
     }
-}
+};
 
-async function destroy(req, res) {
+// Eliminar una noticia
+const destroy = async (req, res) => {
     try {
-        const { id } = req.params;
-        const noticia = await New.findByPk(id);
-        if (!noticia) return res.status(404).json({ message: 'Not found' });
-        // soft delete: set activo = false
-        noticia.activo = false;
-        await noticia.save();
-        res.json({ message: 'Deleted (soft)', noticia });
-    } catch (err) {
-        console.error('News destroy error', err);
-        res.status(500).json({ message: 'Internal server error' });
+        const numRowsDeleted = await New.destroy({ where: { id: req.params.id } });
+        if (numRowsDeleted > 0) {
+            res.json({ message: 'Noticia eliminada correctamente' });
+        } else {
+            res.status(404).json({ message: 'Noticia no encontrada' });
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al eliminar la noticia' });
     }
-}
+};
 
-module.exports = { index, show, create, update, changeState, destroy };
+module.exports = { get, getById, create, update, changeState, destroy };

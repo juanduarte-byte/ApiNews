@@ -1,23 +1,18 @@
 const express = require('express');
-const router = express.Router();
-const newsCtrl = require('../controllers/newsController');
+const { get, getById, create, update, changeState, destroy } = require('../controllers/newsController');
 const { authenticateToken } = require('../middlewares/authMiddleware');
 const { isAdmin, isContributorOrAdmin } = require('../middlewares/roleMiddleware');
 
-// public
-router.get('/', newsCtrl.index);
-router.get('/:id', newsCtrl.show);
+const router = express.Router();
 
-// protected: create by contributor or admin
-router.post('/', authenticateToken, isContributorOrAdmin, newsCtrl.create);
+// Rutas públicas
+router.get('/news', get);
+router.get('/news/:id', getById);
 
-// update by owner or admin
-router.put('/:id', authenticateToken, newsCtrl.update);
-
-// change state - only admin
-router.patch('/:id/state', authenticateToken, isAdmin, newsCtrl.changeState);
-
-// delete (soft) - only admin
-router.delete('/:id', authenticateToken, isAdmin, newsCtrl.destroy);
+// Rutas protegidas
+router.post('/news', authenticateToken, create);
+router.put('/news/:id', authenticateToken, isContributorOrAdmin, update);
+router.patch('/news/:id/state', authenticateToken, isAdmin, changeState); // Ruta para cambiar estado
+router.delete('/news/:id', authenticateToken, isAdmin, destroy);
 
 module.exports = router;

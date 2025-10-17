@@ -1,77 +1,76 @@
+// controllers/authController.js
+const { User } = require('../models/UserModel');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { User } = require('../models/UserModel');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
-
-const passwordField = 'contraseña';
-
-async function register(req, res) {
+const register = async (req, res) => {
     try {
-        const { nombre, apellidos, nick, correo } = req.body;
-        // support both 'contrasena' and 'contraseña' keys from clients
-        const rawPassword = req.body.contrasena || req.body[passwordField];
-        if (!rawPassword || !correo || !nombre || !apellidos || !nick) {
-            return res.status(400).json({ message: 'Missing required fields' });
-        }
+        const { nombre, apellidos, nick, correo, contrasena } = req.body;
+        const hashedPassword = await bcrypt.hash(contrasena, 10);
 
-        const existing = await User.findOne({ where: { correo } });
-        if (existing) return res.status(409).json({ message: 'Email already registered' });
-
-        const hashed = await bcrypt.hash(rawPassword, 10);
-
-        // Assumption: perfil_id 2 = Contribuidor (adjust later if you seed profiles differently)
-        const perfil_id = req.body.perfil_id || 2;
-
-        const created = await User.create({
-            perfil_id,
+        const newUser = await User.create({
             nombre,
             apellidos,
             nick,
             correo,
-            [passwordField]: hashed,
+            contraseña: hashedPassword,
+            perfil_id: 2 // Por defecto, el perfil de "Contribuidor"
         });
 
-        // remove password before returning
-        const result = created.toJSON();
-        delete result[passwordField];
+        // No devolver la contraseña en la respuesta
+        const userJson = newUser.toJSON();
+        delete userJson.contraseña;
 
-        res.status(201).json({ user: result });
-    } catch (err) {
-        console.error('Register error:', err);
-        res.status(500).json({ message: 'Internal server error' });
+        res.status(201).json(userJson);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al registrar el usuario' });
     }
-}
+};
 
-async function login(req, res) {
+const login = async (req, res) => {
     try {
-        const { correo } = req.body;
-        const rawPassword = req.body.contrasena || req.body[passwordField];
-        if (!correo || !rawPassword) return res.status(400).json({ message: 'Missing credentials' });
-
+        const { correo, contrasena } = req.body;
         const user = await User.findOne({ where: { correo } });
-        if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
-        const match = await bcrypt.compare(rawPassword, user[passwordField]);
-        if (!match) return res.status(401).json({ message: 'Invalid credentials' });
+        if (!user) {
+            return res.status(404).json({ message: 'Usuario no encontrado' });
+        }
 
-        const payload = { id: user.id, perfil_id: user.perfil_id, correo: user.correo };
-        const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '8h' });
+        const isMatch = await bcrypt.compare(contrasena, user.contraseña);
+        if (!isMatch) {
+            return res.status(401).json({ message: 'Contraseña incorrecta' });
+        }
 
-        const safeUser = user.toJSON();
-        delete safeUser[passwordField];
+        const payload = {
+            id: user.id,
+            perfil_id: user.perfil_id,
+            correo: user.correo
+        };
 
-        res.json({ token, user: safeUser });
-    } catch (err) {
-        console.error('Login error:', err);
-        res.status(500).json({ message: 'Internal server error' });
+        const token = jwt.sign(payload, process.env.JWT_SECRET || 'secretkey', { expiresIn: '8h' });
+
+        res.json({ token });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al iniciar sesión' });
     }
-}
+};
 
-async function me(req, res) {
-    // expects auth middleware to attach req.user
-    if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
-    res.json({ user: req.user });
-}
+const getMe = async (req, res) => {
+    try {
+        // req.user es añadido por el middleware authenticateToken
+        const user = await User.findByPk(req.user.id, {
+            attributes: { exclude: ['contraseña'] } // Nunca devolver la contraseña
+        });
+        if (!user) {
+            return res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+        res.json(user);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al obtener los datos del usuario' });
+    }
+};
 
-module.exports = { register, login, me };
+module.exports = { register, login, getMe };
