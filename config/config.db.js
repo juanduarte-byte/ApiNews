@@ -1,8 +1,9 @@
 const Sequelize = require('sequelize');
+// Importa las variables desde el archivo de configuración central
+const { DB_NAME, DB_USER, DB_PASSWORD, DB_HOST } = require('../config.js');
 
-// Asegúrate de cambiar 'db_news01' por el nombre de tu base de datos, 'root' por tu usuario y '' por tu contraseña si la tienes.
-const connection = new Sequelize('db_news01', 'root', '', {
-    host: 'localhost',
+const connection = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
+    host: DB_HOST,
     dialect: 'mysql',
 });
 
