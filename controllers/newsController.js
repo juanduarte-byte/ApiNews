@@ -3,20 +3,17 @@ const { Category } = require('../models/CategoryModel');
 const { State } = require('../models/StateModel');
 const { User } = require('../models/UserModel');
 const { Profile } = require('../models/ProfileModel');
+const { validationResult } = require('express-validator');
 
-// Define las relaciones que se incluirán en las consultas de Usuario
 const relationsUser = [
     { model: Profile, attributes: ['id', 'nombre'], as: 'perfil' }
 ];
-
-// Define las relaciones (incluida la anidada) para las consultas de Noticia
 const relations = [
     { model: Category, attributes: ['id', 'nombre', 'descripcion'], as: 'categoria' },
     { model: State, attributes: ['id', 'nombre', 'abreviacion'], as: 'estado' },
     { model: User, attributes: ['id', 'nick', 'nombre'], as: 'usuario', include: relationsUser }
 ];
 
-// Obtener todas las noticias (con filtros y relaciones)
 const get = async (req, res) => {
     try {
         const news = await New.findAll({ include: relations });
@@ -27,7 +24,6 @@ const get = async (req, res) => {
     }
 };
 
-// Obtener una noticia por su ID (con relaciones)
 const getById = async (req, res) => {
     try {
         const newsItem = await New.findByPk(req.params.id, { include: relations });
@@ -42,13 +38,17 @@ const getById = async (req, res) => {
     }
 };
 
-// Crear una nueva noticia
 const create = async (req, res) => {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(422).json({ errors: errors.array() });
+    }
     try {
         const newNews = await New.create({
             ...req.body,
-            usuario_id: req.user.id, // Asigna el ID del usuario autenticado
-            estado_id: 1, // Por defecto, estado "Pendiente"
+            usuario_id: req.user.id, // Assign logged-in user's ID
+            estado_id: 1, // Default to "Pendiente" state
         });
         res.status(201).json(newNews);
     } catch (error) {
@@ -57,14 +57,18 @@ const create = async (req, res) => {
     }
 };
 
-// Actualizar una noticia
 const update = async (req, res) => {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(422).json({ errors: errors.array() });
+    }
     try {
         const newsItem = await New.findByPk(req.params.id);
         if (!newsItem) {
             return res.status(404).json({ message: 'Noticia no encontrada' });
         }
-        // Solo el dueño o un admin pueden actualizar
+        // Only owner or admin can update
         if (newsItem.usuario_id !== req.user.id && req.user.perfil_id !== 1) {
             return res.status(403).json({ message: 'No tienes permiso para actualizar esta noticia' });
         }
@@ -76,10 +80,14 @@ const update = async (req, res) => {
     }
 };
 
-// Cambiar el estado de una noticia (solo Admin)
 const changeState = async (req, res) => {
+    // No validation needed here as only state_id is expected
     try {
         const { estado_id } = req.body;
+         // Basic validation for estado_id
+        if (typeof estado_id !== 'number') {
+             return res.status(400).json({ message: 'El campo estado_id debe ser un número.' });
+        }
         const newsItem = await New.findByPk(req.params.id);
         if (!newsItem) {
             return res.status(404).json({ message: 'Noticia no encontrada' });
@@ -92,7 +100,6 @@ const changeState = async (req, res) => {
     }
 };
 
-// Eliminar una noticia
 const destroy = async (req, res) => {
     try {
         const numRowsDeleted = await New.destroy({ where: { id: req.params.id } });
